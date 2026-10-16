@@ -22,15 +22,15 @@ jobs:
         with:
           python-version: "3.12"
 
-- name: Install dependencies
-  run: |
-    pip install requests
+      - name: Install dependencies
+        run: |
+          pip install requests
 
-- name: Check Instagram
-  env:
-    DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-    APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
-  run: python instagram_to_discord.py
+      - name: Check Instagram
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+        run: python instagram_to_discord.py
 
       - name: Save latest Instagram post
         run: |
