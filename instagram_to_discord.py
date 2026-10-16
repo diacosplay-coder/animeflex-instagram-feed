@@ -1,114 +1,116 @@
 import os
 import requests
-import instaloader
 
-INSTAGRAM_USERNAME = "valentin.d.prototyp"
+TASK_ID = "enterprised_colonnade~instagram-posts"
 STATE_FILE = "last_post.txt"
 
+apify_token = os.environ.get("APIFY_API_TOKEN")
 webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+
+if not apify_token:
+    raise RuntimeError("Chýba APIFY_API_TOKEN.")
 
 if not webhook_url:
     raise RuntimeError("Chýba DISCORD_WEBHOOK_URL.")
 
-loader = instaloader.Instaloader(
-    download_pictures=False,
-    download_videos=False,
-    download_video_thumbnails=False,
-    save_metadata=False,
-    compress_json=False,
-    quiet=True,
+print("Spúšťam Instagram scrape cez Apify...")
+
+apify_url = (
+    f"https://api.apify.com/v2/actor-tasks/"
+    f"{TASK_ID}/run-sync-get-dataset-items"
 )
 
-print(f"Kontrolujem Instagram @{INSTAGRAM_USERNAME}...")
-
-profile = instaloader.Profile.from_username(
-    loader.context,
-    INSTAGRAM_USERNAME
+response = requests.post(
+    apify_url,
+    params={"token": apify_token},
+    timeout=180,
 )
 
-posts = profile.get_posts()
+response.raise_for_status()
 
-latest_posts = []
+items = response.json()
 
-for post in posts:
-    latest_posts.append(post)
-
-    if len(latest_posts) >= 10:
-        break
-
-if not latest_posts:
-    print("Nenašli sa žiadne príspevky.")
+if not items:
+    print("Apify nevrátil žiadny Instagram post.")
     raise SystemExit(0)
 
-latest_post = latest_posts[0]
+post = items[0]
 
-# Pri úplne prvom spustení si iba zapamätáme aktuálny post.
-# Nechceme, aby po zapnutí bota poslal starý príspevok.
+post_id = str(
+    post.get("id")
+    or post.get("shortCode")
+    or post.get("url")
+    or ""
+)
+
+if not post_id:
+    raise RuntimeError("Instagram post nemá použiteľné ID.")
+
+caption = post.get("caption") or ""
+permalink = post.get("url")
+shortcode = post.get("shortCode")
+image_url = post.get("displayUrl")
+username = post.get("ownerUsername") or "valentin.d.prototyp"
+
+if not permalink and shortcode:
+    permalink = f"https://www.instagram.com/p/{shortcode}/"
+
+# Discord embed má limit na dĺžku description
+if len(caption) > 3800:
+    caption = caption[:3797] + "..."
+
+# Prvé spustenie:
+# iba si zapamätáme aktuálny post a nič neposielame.
 if not os.path.exists(STATE_FILE):
     with open(STATE_FILE, "w", encoding="utf-8") as file:
-        file.write(latest_post.shortcode)
+        file.write(post_id)
 
-    print(
-        f"Prvé spustenie. Ukladám aktuálny post "
-        f"{latest_post.shortcode} a nič neposielam."
-    )
+    print(f"Prvé spustenie. Ukladám aktuálny post {post_id}.")
+    print("Na Discord zatiaľ nič neposielam.")
     raise SystemExit(0)
 
 with open(STATE_FILE, "r", encoding="utf-8") as file:
-    last_shortcode = file.read().strip()
+    previous_post_id = file.read().strip()
 
-new_posts = []
-
-for post in latest_posts:
-    if post.shortcode == last_shortcode:
-        break
-
-    new_posts.append(post)
-
-if not new_posts:
+if post_id == previous_post_id:
     print("Žiadny nový Instagram post.")
     raise SystemExit(0)
 
-# Posielame od najstaršieho nového postu po najnovší
-for post in reversed(new_posts):
+print("Našiel sa nový Instagram post.")
 
-    permalink = f"https://www.instagram.com/p/{post.shortcode}/"
+embed = {
+    "author": {
+        "name": f"@{username}"
+    },
+    "title": "Nový príspevok na Instagrame",
+    "description": caption,
+}
 
-    caption = post.caption or ""
+if permalink:
+    embed["url"] = permalink
 
-    if len(caption) > 3500:
-        caption = caption[:3497] + "..."
-
-    embed = {
-        "author": {
-            "name": f"@{INSTAGRAM_USERNAME}"
-        },
-        "title": "Nový príspevok na Instagrame",
-        "url": permalink,
-        "description": caption,
-        "image": {
-            "url": post.url
-        }
+if image_url:
+    embed["image"] = {
+        "url": image_url
     }
 
-    payload = {
-        "username": "AnimeFlex Instagram",
-        "content": permalink,
-        "embeds": [embed]
-    }
+payload = {
+    "username": "AnimeFlex Instagram",
+    "embeds": [embed],
+}
 
-    response = requests.post(
-        webhook_url,
-        json=payload,
-        timeout=30
-    )
+if permalink:
+    payload["content"] = permalink
 
-    response.raise_for_status()
+discord_response = requests.post(
+    webhook_url,
+    json=payload,
+    timeout=30,
+)
 
-    print(f"Odoslaný nový post: {post.shortcode}")
+discord_response.raise_for_status()
 
-# Zapamätáme si najnovší post
 with open(STATE_FILE, "w", encoding="utf-8") as file:
-    file.write(latest_post.shortcode)
+    file.write(post_id)
 
-print("Hotovo.")
+print("Nový Instagram post bol odoslaný na Discord.")
