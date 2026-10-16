@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests instaloader
+          pip install requests "git+https://github.com/instaloader/instaloader.git@refs/pull/2722/head"
 
       - name: Check Instagram
         env:
