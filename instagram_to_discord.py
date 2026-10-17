@@ -95,7 +95,7 @@ if image_url:
     }
 
 payload = {
-    "username": "AnimeFlex Instagram",
+    "username": "AnimeFlexTV",
     "embeds": [embed],
 }
 
