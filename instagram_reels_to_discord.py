@@ -93,7 +93,7 @@ if thumbnail:
     }
 
 payload = {
-    "username": "AnimeFlex Instagram",
+    "username": "AnimeFlexTV",
     "embeds": [embed],
 }
 
